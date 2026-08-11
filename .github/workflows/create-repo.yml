@@ -12,11 +12,24 @@ on:
         required: false
         type: string
         default: ''
+      port_node_run_id:
+        description: 'Port node run ID for status reporting'
+        required: true
+        type: string
 
 jobs:
   create-repo:
     runs-on: ubuntu-latest
     steps:
+      - name: Get Port access token
+        id: port_token
+        run: |
+          TOKEN=$(curl -s -X POST "https://api.port.io/v1/auth/access_token" \
+            -H "Content-Type: application/json" \
+            -d '{"clientId": "${{ secrets.PORT_CLIENT_ID }}", "clientSecret": "${{ secrets.PORT_CLIENT_SECRET }}"}' \
+            | jq -r '.accessToken')
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+
       - name: Create repository
         env:
           GH_TOKEN: ${{ secrets.REPO_CREATION_PAT }}
@@ -24,4 +37,20 @@ jobs:
           gh repo create "${{ inputs.repo_name }}" \
             --private \
             --description "${{ inputs.description }}"
+
+      - name: Report success to Port
+        if: success()
+        run: |
+          curl -s -X PATCH "https://api.port.io/v1/workflows/nodes/runs/${{ inputs.port_node_run_id }}" \
+            -H "Authorization: Bearer ${{ steps.port_token.outputs.token }}" \
+            -H "Content-Type: application/json" \
+            -d '{"status": "COMPLETED", "result": "SUCCESS", "output": {"repo_name": "${{ inputs.repo_name }}"}}'
+
+      - name: Report failure to Port
+        if: failure()
+        run: |
+          curl -s -X PATCH "https://api.port.io/v1/workflows/nodes/runs/${{ inputs.port_node_run_id }}" \
+            -H "Authorization: Bearer ${{ steps.port_token.outputs.token }}" \
+            -H "Content-Type: application/json" \
+            -d '{"status": "COMPLETED", "result": "FAILED"}'
 
