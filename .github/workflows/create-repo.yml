@@ -12,33 +12,11 @@ on:
         required: false
         type: string
         default: ''
-      port_context:
-        description: 'Port action run context (contains runId) - passed automatically by Port'
-        required: false
-        type: string
-        default: ''
 
 jobs:
   create-repo:
     runs-on: ubuntu-latest
     steps:
-      - name: Extract Port run ID
-        id: port_run
-        if: ${{ inputs.port_context != '' }}
-        run: |
-          echo "run_id=$(echo '${{ inputs.port_context }}' | jq -r .runId)" >> "$GITHUB_OUTPUT"
-
-      - name: Report run started
-        if: ${{ steps.port_run.outputs.run_id != '' }}
-        uses: port-labs/port-github-action@v1
-        with:
-          clientId: ${{ secrets.PORT_CLIENT_ID }}
-          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
-          baseUrl: https://api.getport.io
-          operation: PATCH_RUN
-          runId: ${{ steps.port_run.outputs.run_id }}
-          logMessage: Creating repository...
-
       - name: Create repository
         env:
           GH_TOKEN: ${{ secrets.REPO_CREATION_PAT }}
@@ -48,26 +26,3 @@ jobs:
             --description "${{ inputs.description }}" \
             --confirm
 
-      - name: Report success
-        if: ${{ success() && steps.port_run.outputs.run_id != '' }}
-        uses: port-labs/port-github-action@v1
-        with:
-          clientId: ${{ secrets.PORT_CLIENT_ID }}
-          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
-          baseUrl: https://api.getport.io
-          operation: PATCH_RUN
-          runId: ${{ steps.port_run.outputs.run_id }}
-          status: SUCCESS
-          logMessage: Repository ${{ inputs.repo_name }} created successfully
-
-      - name: Report failure
-        if: ${{ failure() && steps.port_run.outputs.run_id != '' }}
-        uses: port-labs/port-github-action@v1
-        with:
-          clientId: ${{ secrets.PORT_CLIENT_ID }}
-          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
-          baseUrl: https://api.getport.io
-          operation: PATCH_RUN
-          runId: ${{ steps.port_run.outputs.run_id }}
-          status: FAILURE
-          logMessage: Repository creation failed
