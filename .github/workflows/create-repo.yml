@@ -12,6 +12,10 @@ on:
         required: false
         type: string
         default: ''
+      port_run_id:
+        description: 'Port run ID for status reporting'
+        required: true
+        type: string
 
 jobs:
   create-repo:
@@ -23,6 +27,27 @@ jobs:
         run: |
           gh repo create "${{ inputs.repo_name }}" \
             --private \
-            --description "${{ inputs.description }}" \
-            --confirm
+            --description "${{ inputs.description }}"
+
+      - name: Report success to Port
+        if: success()
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ secrets.PORT_CLIENT_ID }}
+          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
+          operation: PATCH_RUN
+          runId: ${{ inputs.port_run_id }}
+          status: SUCCESS
+          logMessage: "Repository '${{ inputs.repo_name }}' created successfully ✅"
+
+      - name: Report failure to Port
+        if: failure()
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ secrets.PORT_CLIENT_ID }}
+          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
+          operation: PATCH_RUN
+          runId: ${{ inputs.port_run_id }}
+          status: FAILURE
+          logMessage: "Failed to create repository '${{ inputs.repo_name }}' ❌"
 
