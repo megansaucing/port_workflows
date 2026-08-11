@@ -12,33 +12,62 @@ on:
         required: false
         type: string
         default: ''
-      port_run_id:
-        description: 'Port action run ID (for reporting status back)'
+      port_context:
+        description: 'Port action run context (contains runId) - passed automatically by Port'
         required: false
         type: string
+        default: ''
 
 jobs:
   create-repo:
     runs-on: ubuntu-latest
     steps:
-      - name: Report run started
-        if: ${{ inputs.port_run_id != '' }}
+      - name: Extract Port run ID
+        id: port_run
+        if: ${{ inputs.port_context != '' }}
         run: |
-          curl -X POST "https://api.getport.io/v1/actions/runs/${{ inputs.port_run_id }}/logs" \
-            -H "Authorization: Bearer ${{ steps.port_token.outputs.access_token }}" \
-            -H "Content-Type: application/json" \
-            -d '{"message": "Starting repository creation..."}' || true
+          echo "run_id=$(echo '${{ inputs.port_context }}' | jq -r .runId)" >> "$GITHUB_OUTPUT"
+
+      - name: Report run started
+        if: ${{ steps.port_run.outputs.run_id != '' }}
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ secrets.PORT_CLIENT_ID }}
+          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
+          baseUrl: https://api.getport.io
+          operation: PATCH_RUN
+          runId: ${{ steps.port_run.outputs.run_id }}
+          logMessage: Creating repository...
 
       - name: Create repository
         env:
           GH_TOKEN: ${{ secrets.REPO_CREATION_PAT }}
         run: |
-          gh repo create "megansaucing/${{ inputs.repo_name }}" \
-            --public \
+          gh repo create "${{ inputs.repo_name }}" \
+            --private \
             --description "${{ inputs.description }}" \
             --confirm
 
       - name: Report success
-        if: ${{ success() && inputs.port_run_id != '' }}
-        run: |
-          echo "Repository ${{ inputs.repo_name }} created successfully"
+        if: ${{ success() && steps.port_run.outputs.run_id != '' }}
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ secrets.PORT_CLIENT_ID }}
+          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
+          baseUrl: https://api.getport.io
+          operation: PATCH_RUN
+          runId: ${{ steps.port_run.outputs.run_id }}
+          status: SUCCESS
+          logMessage: Repository ${{ inputs.repo_name }} created successfully
+
+      - name: Report failure
+        if: ${{ failure() && steps.port_run.outputs.run_id != '' }}
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ secrets.PORT_CLIENT_ID }}
+          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
+          baseUrl: https://api.getport.io
+          operation: PATCH_RUN
+          runId: ${{ steps.port_run.outputs.run_id }}
+          status: FAILURE
+          logMessage: Repository creation failed
