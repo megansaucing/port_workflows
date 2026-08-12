@@ -12,8 +12,12 @@ on:
         required: false
         type: string
         default: ''
+      port_workflow_run_id:
+        description: 'Port workflow run ID (wfr_...)'
+        required: true
+        type: string
       port_node_run_id:
-        description: 'Port node run ID for status reporting'
+        description: 'Port node run ID (wfnr_...)'
         required: true
         type: string
 
@@ -28,7 +32,7 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"clientId": "${{ secrets.PORT_CLIENT_ID }}", "clientSecret": "${{ secrets.PORT_CLIENT_SECRET }}"}' \
             | jq -r '.accessToken')
-          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
       - name: Create repository
         env:
@@ -36,12 +40,13 @@ jobs:
         run: |
           gh repo create "${{ inputs.repo_name }}" \
             --private \
-            --description "${{ inputs.description }}"
+            --description "${{ inputs.description }}" \
+            --confirm
 
       - name: Report success to Port
         if: success()
         run: |
-          curl -s -X PATCH "https://api.port.io/v1/workflows/nodes/runs/${{ inputs.port_node_run_id }}" \
+          curl -s -X PATCH "https://api.port.io/v1/workflows/runs/${{ inputs.port_workflow_run_id }}/nodes/${{ inputs.port_node_run_id }}" \
             -H "Authorization: Bearer ${{ steps.port_token.outputs.token }}" \
             -H "Content-Type: application/json" \
             -d '{"status": "COMPLETED", "result": "SUCCESS", "output": {"repo_name": "${{ inputs.repo_name }}"}}'
@@ -49,8 +54,7 @@ jobs:
       - name: Report failure to Port
         if: failure()
         run: |
-          curl -s -X PATCH "https://api.port.io/v1/workflows/nodes/runs/${{ inputs.port_node_run_id }}" \
+          curl -s -X PATCH "https://api.port.io/v1/workflows/runs/${{ inputs.port_workflow_run_id }}/nodes/${{ inputs.port_node_run_id }}" \
             -H "Authorization: Bearer ${{ steps.port_token.outputs.token }}" \
             -H "Content-Type: application/json" \
-            -d '{"status": "COMPLETED", "result": "FAILED"}'
-
+            -d '{"status": "COMPLETED", "result": "FAILURE"}'
