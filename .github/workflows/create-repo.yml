@@ -35,7 +35,7 @@ jobs:
           GH_TOKEN: ${{ secrets.REPO_CREATION_PAT }}
         run: |
           gh repo create "${{ inputs.repo_name }}" \
-            --private \
+            --public \
             --description "${{ inputs.description }}"
 
       - name: Report success to Port
